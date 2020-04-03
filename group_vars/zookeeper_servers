@@ -1,0 +1,7 @@
+---
+
+# http://archive.apache.org/dist/zookeeper
+
+zk_version: 3.6.0
+
+deploy_dir: /home/{{ ansible_ssh_user }}/zookeeper

@@ -1,0 +1,8 @@
+---
+
+kafka_datalog_dir: "{{ deploy_dir }}/datalog"
+kafka_log_dir: "{{ deploy_dir }}/log"
+kafka_link_dir: "{{ deploy_dir }}/kafka"
+kafka_run_dir: "{{ deploy_dir }}/scripts"
+
+kafka_base_url: http://archive.apache.org/dist/kafka

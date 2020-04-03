@@ -1,0 +1,83 @@
+---
+
+- name: Create diretories
+  file: path="{{ item }}" state=directory mode=0755
+  loop:
+  - "{{ downloads_dir }}"
+  - "{{ zk_log_dir }}"
+  - "{{ zk_data_dir }}"
+  - "{{ zk_datalog_dir }}"
+  - "{{ zk_run_dir }}"
+
+- name: Download zookeeper
+  get_url:
+    url: "{{ zk_base_url }}/zookeeper-{{ zk_version }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}.tar.gz"
+    dest: "{{ downloads_dir }}"
+    checksum: "sha512:{{ zk_base_url }}/zookeeper-{{ zk_version }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}.tar.gz.sha512"
+    # force: yes
+    validate_certs: no
+  register: get_url_res
+  until: "'OK' in get_url_res.msg or 'file already exists' in get_url_res.msg"
+  retries: 3
+  delay: "{{ 10 | random }}"
+
+- name: Extract zookeeper
+  unarchive:
+    src: "{{ downloads_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}.tar.gz"
+    dest: "{{ deploy_dir }}"
+    copy: yes
+
+- name: Create myid
+  template:
+    src: myid.j2
+    dest: "{{ zk_data_dir }}/myid"
+    mode: '0644'
+    backup: yes
+
+- name: Copy zoo.cfg
+  copy:
+    src: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/zoo_sample.cfg"
+    dest: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/zoo.cfg"
+    mode: '0644'
+    remote_src: yes
+
+- name: Remove zoo.cfg dataDir
+  lineinfile:
+    path: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/zoo.cfg"
+    state: absent
+    regexp: '^dataDir'
+
+- name: Set zoo.cfg workdir
+  blockinfile:
+    path: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/zoo.cfg"
+    block: |
+      {{ item.name }}={{ item.dir }}
+    marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item.name }}"
+  loop:
+    - { name: dataDir, dir: "{{ zk_data_dir }}" }
+    - { name: dataLogDir, dir: "{{ zk_datalog_dir }}" }
+
+- name: Set zoo.cfg servers
+  blockinfile:
+    path: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/zoo.cfg"
+    block: server.{{ hostvars[item].myid }}={{ hostvars[item].ansible_host }}:2888:3888
+    marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item }}"
+  loop: "{{ groups['zookeeper_servers'] }}"
+
+- name: Change logDir
+  lineinfile:
+    path: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}/conf/log4j.properties"
+    regexp: 'zookeeper\.log\.dir=\.'
+    line: "zookeeper.log.dir={{ zk_log_dir }}"
+
+- name: Symlink run dir
+  file:
+    src: "{{ deploy_dir }}/{{ zk_prefix }}zookeeper-{{ zk_version }}{{ zk_suffix }}"
+    path: "{{ zk_link_dir }}"
+    state: link
+
+- name: Create run script
+  template:
+    src: run_zk.sh.j2
+    dest: "{{ zk_run_dir }}/run_zk.sh"
+    mode: '0766'

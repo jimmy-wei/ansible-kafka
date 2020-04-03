@@ -1,0 +1,14 @@
+---
+
+- name: Install zookeeper
+  hosts: zookeeper_servers
+  roles:
+  - jdk
+  - { role: zookeeper, zk_prefix: 'apache-', zk_suffix: '-bin', when: "zk_version is version('3.5.5', '>=')" }
+  - { role: zookeeper, when: "zk_version is version('3.5.5', '<')" }
+
+- name: Install kafka
+  hosts: kafka_servers
+  roles:
+  - jdk
+  - kafka

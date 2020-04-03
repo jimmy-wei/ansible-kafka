@@ -1,0 +1,33 @@
+---
+
+- hosts: zookeeper_servers
+  tasks:
+    - name: Start zookeeper
+      shell: cd {{ deploy_dir }}/scripts && ./run_zk.sh start
+
+    - name: Wait for start finished
+      shell: cd {{ deploy_dir }}/scripts && ./run_zk.sh status
+      register: res
+      until: res.stdout.find("follower") != -1 or res.stdout.find("leader") != -1 or res.stdout.find("standalone") != -1
+      retries: 10
+      delay: 15
+
+    - name: Wait for zookeeper up
+      wait_for: |
+        host={{ ansible_host }} port=2181 state=present
+
+- hosts: kafka_servers
+  tasks:
+    - name: wait zookeeper
+      pause:
+          seconds: 6
+
+- hosts: kafka_servers
+  serial: 1
+  tasks:
+    - name: Start kafka
+      shell: cd {{ deploy_dir }}/scripts && ./run_kafka.sh start
+
+    - name: Wait for kafka up
+      wait_for: |
+        host={{ ansible_host }} port=9092 state=present

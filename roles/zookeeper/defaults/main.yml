@@ -1,0 +1,11 @@
+---
+
+zk_data_dir: "{{ deploy_dir }}/data"
+zk_datalog_dir: "{{ deploy_dir }}/datalog"
+zk_log_dir: "{{ deploy_dir }}/log"
+zk_link_dir: "{{ deploy_dir }}/zk"
+zk_run_dir: "{{ deploy_dir }}/scripts"
+
+zk_base_url: http://archive.apache.org/dist/zookeeper
+zk_prefix: ''
+zk_suffix: ''

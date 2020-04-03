@@ -1,0 +1,12 @@
+---
+- name: Check if JDK exists
+  shell: command -v java
+  register: is_jdk_existed
+  ignore_errors: True
+  changed_when: False
+  check_mode: False
+
+- name: Install JDK
+  apt: name="{{ jdk_version }}" state=present
+  become: true
+  when: ansible_os_family == "Debian" and is_jdk_existed.rc != 0

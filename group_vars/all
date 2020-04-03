@@ -1,0 +1,4 @@
+---
+
+ansible_log_dir: "{{ playbook_dir }}/log"
+downloads_dir: "{{ playbook_dir }}/downloads"

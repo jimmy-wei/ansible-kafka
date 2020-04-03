@@ -1,0 +1,83 @@
+---
+
+- name: Create diretories
+  file: path="{{ item }}" state=directory mode=0755
+  loop:
+  - "{{ downloads_dir }}"
+  - "{{ kafka_datalog_dir }}"
+  - "{{ kafka_log_dir }}"
+  - "{{ kafka_run_dir }}"
+
+- name: Download kafka checksum
+  get_url:
+    url: "{{ kafka_base_url }}/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz.sha1"
+    dest: "{{ downloads_dir }}"
+
+- name: Register checksum value
+  shell: cat "{{ downloads_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz.sha1" | awk -F ':' '{ print $2 }'
+  register: kafka_checksum_value
+
+# - debug: var=kafka_checksum_value.stdout
+
+- name: Download kafka
+  get_url:
+    url: "{{ kafka_base_url }}/{{ kafka_version }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+    dest: "{{ downloads_dir }}"
+    checksum: "sha1:{{ kafka_checksum_value.stdout }}"
+    # force: yes
+    validate_certs: no
+  register: get_url_res
+  until: "'OK' in get_url_res.msg or 'file already exists' in get_url_res.msg"
+  retries: 3
+  delay: "{{ 10 | random }}"
+
+- name: Extract kafka
+  unarchive:
+    src: "{{ downloads_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}.tgz"
+    dest: "{{ deploy_dir }}"
+    copy: yes
+
+- name: Set server broker_id
+  lineinfile:
+    path: "{{ deploy_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}/config/server.properties"
+    regexp: 'broker\.id=0'
+    line: "broker.id={{ id }}"
+
+- name: Set server address
+  lineinfile:
+    path: "{{ deploy_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}/config/server.properties"
+    insertafter: '^#listeners='
+    line: "listeners=PLAINTEXT://{{ ansible_host }}:9092"
+
+- name: Set server log_dirs
+  lineinfile:
+    path: "{{ deploy_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}/config/server.properties"
+    regexp: '^log\.dirs='
+    line: "log.dirs={{ kafka_datalog_dir }}"
+
+- name: Get zks
+  vars:
+  - zk: "{{ hostvars[item].ansible_host }}:2181"
+  set_fact:
+    zks: "{{ (zks | default([])) + [zk] }}"
+  loop: "{{ groups['zookeeper_servers'] }}"
+
+- name: Set zks
+  vars:
+  - zk_servers: "{{ zks|join(',') }}"
+  lineinfile:
+    path: "{{ deploy_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}/config/server.properties"
+    regexp: '^zookeeper\.connect='
+    line: "zookeeper.connect={{ zk_servers }}"
+
+- name: Symlink run dir
+  file:
+    src: "{{ deploy_dir }}/kafka_{{ scala_version }}-{{ kafka_version }}"
+    path: "{{ kafka_link_dir }}"
+    state: link
+
+- name: Create run script
+  template:
+    src: run_kafka.sh.j2
+    dest: "{{ kafka_run_dir }}/run_kafka.sh"
+    mode: '0766'
